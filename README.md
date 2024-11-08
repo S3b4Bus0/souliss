@@ -2,7 +2,7 @@
 
 Souliss is a **networking framework** for interconnected Things, smart homes and automated appliances. It includes a network layer that gives virtualization over the communication media, an event based protocol and datastructure and user interfaces based on Android and openHAB.
 
-This repository contains the code that runs over *Arduino AVR and ESP8266* and the examples to getting started.
+This repository contains the code that runs over *Arduino AVR, ESP8266 and ESP32* and the examples to getting started.
 
 ## Getting Started
 
