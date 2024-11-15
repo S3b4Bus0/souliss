@@ -1,6 +1,6 @@
 {
   "name": "souliss",
-  "version": "7.4.1-beta",
+  "version": "7.4.2-beta",
   "keywords": "communication, network, wifi, ethernet",
   "description": "SmartHome Networking Framework. Build a network of multiple nodes over WiFi/Ethernet, Wireless and RS485 for your smart home",
   "authors": 
