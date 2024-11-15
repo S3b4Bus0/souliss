@@ -1,5 +1,6 @@
 {
   "name": "souliss",
+  "version": "7.4.1-beta",
   "keywords": "communication, network, wifi, ethernet",
   "description": "SmartHome Networking Framework. Build a network of multiple nodes over WiFi/Ethernet, Wireless and RS485 for your smart home",
   "authors": 
@@ -21,7 +22,9 @@
   "platforms":
   [
     "atmelavr",
-    "espressif"
+    "espressif8266",
+    "espressif32"
+
   ],
   "build": {
     "srcFilter": [
