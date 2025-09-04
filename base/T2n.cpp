@@ -206,7 +206,7 @@ void Souliss_SetT22(U8 *memory_map, U8 slot)
 		-  0x02(hex) as command, Software OPEN request (stop 4 cycles if closing)
 		-  0x04(hex) as command, STOP request
 		-  0x08(hex) as command, CLOSE request (stop if opening) 
-		-  0x10(hex) as command, OPEN request (stop if closing)
+		-  0x10(hex for OPEN request (stop if closing)
 		
 		Output status:
 		- 1(hex) for CLOSING,
@@ -217,123 +217,113 @@ void Souliss_SetT22(U8 *memory_map, U8 slot)
 	
 */	
 /**************************************************************************/
-U8 Souliss_Logic_T22(U8 *memory_map, U8 slot, U8 *trigger, U8 timeout=Souliss_T2n_Timer_Val)
+U8 Souliss_Logic_T22(U8 *memory_map, U8 slot, U8 *trigger, U8 porcentaje_destino)
 {
-	U8 i_trigger=0;														// Internal trigger
-	if(timeout<=Souliss_T2n_Timer_Off)	timeout=Souliss_T2n_Timer_Val;
-	else if (timeout>Souliss_T2n_Timer_Val) timeout=Souliss_T2n_Timer_Val;
-
-	// convert toggle command in the right open/close
-	if( memory_map[MaCaco_IN_s + slot] == Souliss_T2n_ToggleCmd )
-	{
-		if((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Close) || 
-			(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Close))
-			memory_map[MaCaco_IN_s + slot] = Souliss_T2n_OpenCmd_SW;
-		else if((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Open) || 
-			(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Open))
-			memory_map[MaCaco_IN_s + slot] = Souliss_T2n_CloseCmd_SW;
-		else
-			memory_map[MaCaco_IN_s + slot] = Souliss_T2n_OpenCmd_SW;	
-	}
-
-	// Look for input value, update output. If the output is not set, trig a data
-	// change, otherwise just reset the input
-	
-	if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_SW) || 
-		(memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_SW) || 
-		(memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_Local) ||
-		(memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_Local) ||		
-		(memory_map[MaCaco_IN_s + slot] == Souliss_T2n_StopCmd))
-	{
-		// Change the output value, between OPEN and CLOSE always STOP is performed	
-		if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_StopCmd))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;			// Stop Command
-		else if(((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_Local)) && 
-				(((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Stop) && !Souliss_T2n_IsTemporaryStop) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Close) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_NoLimSwitch)))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Open;			// Open Command
-		else if(((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_Local)) && 
-				(((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Stop) && !Souliss_T2n_IsTemporaryStop) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Open) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_NoLimSwitch)))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Close;			// Close command
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_Local) || (memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_Local))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;			// Stop Command			
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_SW) && 
-				(((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Stop) && !Souliss_T2n_IsTemporaryStop) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Close) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_NoLimSwitch)))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Open;			// Open SW Command immediately executable because motor isn't running
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_SW) && (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Close))
-		{																																	// Open SW Command that can't be executed because motor is running opposite direction
-			memory_map[MaCaco_AUXIN_s + slot] = Souliss_T2n_TimedStop_Val;	// Set timer value for the temporary Stop state						
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;		// Temporary stop
-		}
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_SW) && (memory_map[MaCaco_AUXIN_s + slot] == Souliss_T2n_TimedStop_Off))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Open;			// Open SW Command executable because temporary stop is over
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_SW) && 
-				(((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Stop) && !Souliss_T2n_IsTemporaryStop) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Open) || (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_NoLimSwitch)))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Close;			// Close SW command	immediately executable because motor isn't running	
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_SW) && (memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Open))
-		{																																	// Close SW Command that can't be executed because motor is running opposite direction
-			memory_map[MaCaco_AUXIN_s + slot] = Souliss_T2n_TimedStop_Val;	// Set timer value for the temporary Stop state						
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;		// Temporary stop
-		}
-		else if((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_SW) && (memory_map[MaCaco_AUXIN_s + slot] == Souliss_T2n_TimedStop_Off))
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Close;			// Close SW Command executable because temporary stop is over
-		
-		// If a command was issued, set the timer
-		if(!Souliss_T2n_IsTemporaryStop) 
-		{
-			memory_map[MaCaco_AUXIN_s + slot] = timeout;							// Set timer value
-			memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;					// Reset command
-			
-			// Set the trigger
-			i_trigger = Souliss_TRIGGED;				
-		}
-	}
-	else if(((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_LimSwitch_Close) &&
-			!(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Open)) &&
-			!(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Close) ||  
-			((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Close) && 
-				(memory_map[MaCaco_AUXIN_s + slot] == Souliss_T2n_Timer_Off)))
-	{
-		memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_State_Close;				// Close Limit Switch
-		memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;					// Reset
-  		i_trigger = Souliss_TRIGGED;
-	}
-	else if(((memory_map[MaCaco_IN_s + slot] == Souliss_T2n_LimSwitch_Open) &&
-			!(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Close)) &&
-			!(memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_State_Open) || 
-			((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Open) && 
-				(memory_map[MaCaco_AUXIN_s + slot] == Souliss_T2n_Timer_Off)))
-	{
-		memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_State_Open;				// Open Limit Switch
-		memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;					// Reset
-  		i_trigger = Souliss_TRIGGED;	
-	}
-	else if((memory_map[MaCaco_OUT_s + slot] == Souliss_T2n_Coil_Stop) && 
-			(memory_map[MaCaco_AUXIN_s + slot] == Souliss_T2n_Timer_Off))
-	{
-		memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_NoLimSwitch;				// No Limit Switch
-		memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;					// Reset
-	  	i_trigger = Souliss_TRIGGED;	
-	}	
-	
-	// Update the trigger
-	if(i_trigger)
-		*trigger = i_trigger;
-	
-	return i_trigger;	
+    U8 i_trigger = 0;
+    // Compatibilidad con comandos estándar Souliss (app Android)
+    if (memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_SW ||
+        memory_map[MaCaco_IN_s + slot] == Souliss_T2n_OpenCmd_Local) {
+        porcentaje_destino = 100;
+    } else if (memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_SW ||
+               memory_map[MaCaco_IN_s + slot] == Souliss_T2n_CloseCmd_Local) {
+        porcentaje_destino = 0;
+    }
+    S16 pos_actual = persiana_pos[slot];
+    S16 pos_destino = porcentaje_destino;
+    // Si la posición es desconocida, solo permite movimientos completos
+    if (pos_actual == -1 && (pos_destino != 0 && pos_destino != 100)) {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;
+        return 0;
+    }
+    U32 tiempo_mov = (U32)(abs(diferencia) * tiempo_total_persiana[slot]) / 100;
+    if (tiempo_mov == 0) tiempo_mov = 100; // mínimo 100 ms
+    // Inicia movimiento
+    if (diferencia > 0) {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Open;
+    } else {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Close;
+    }
+    persiana_mov_start[slot] = millis();
+    persiana_mov_destino[slot] = pos_destino;
+    memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;
+    i_trigger = 1; // Souliss_TRIGGED suele ser 1
+    if (i_trigger)
+        *trigger = i_trigger;
+    return i_trigger;
 }
 
-/**************************************************************************/
-/*!
-	Timer associated to T22, timeout the OPEN/CLOSE commands
-*/	
-/**************************************************************************/
 void Souliss_T22_Timer(U8 *memory_map, U8 slot)
 {
-			// Memory value is used as timer
-	if(((memory_map[MaCaco_AUXIN_s + slot] > Souliss_T2n_Timer_Off) &&
-		(memory_map[MaCaco_AUXIN_s + slot] <= Souliss_T2n_Timer_Val)) || 
-		Souliss_T2n_IsTemporaryStop )
-	{	
-			memory_map[MaCaco_AUXIN_s + slot]--;									// Decrease timer
-	}	
+    if (persiana_mov_start[slot] == 0 || persiana_mov_destino[slot] == -1)
+        return; // No hay movimiento en curso
+    S16 pos_actual = persiana_pos[slot];
+    S16 pos_destino = persiana_mov_destino[slot];
+    S16 diferencia = pos_destino - pos_actual;
+    U32 tiempo_mov = (U32)(abs(diferencia) * tiempo_total_persiana[slot]) / 100;
+    U32 tiempo_transcurrido = millis() - persiana_mov_start[slot];
+    if (tiempo_transcurrido >= tiempo_mov) {
+        // Movimiento terminado
+        persiana_pos[slot] = pos_destino;
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;
+        persiana_mov_start[slot] = 0;
+        persiana_mov_destino[slot] = -1;
+    }
+    // Si quieres actualizar la posición estimada en tiempo real (opcional):
+    else {
+        S16 avance = (S16)((tiempo_transcurrido * abs(diferencia)) / tiempo_mov);
+        if (diferencia > 0)
+            persiana_pos[slot] = pos_actual + avance;
+        else
+            persiana_pos[slot] = pos_actual - avance;
+    }
+}
+  return 0;
+    }
+    if (pos_actual == -1) pos_actual = (pos_destino == 0) ? 100 : 0; // Asume lo opuesto para calcular tiempo
+    S16 diferencia = pos_destino - pos_actual;
+    if (diferencia == 0) {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;
+        return 0;
+    }
+    U32 tiempo_mov = (U32)(abs(diferencia) * tiempo_total_persiana[slot]) / 100;
+    if (tiempo_mov == 0) tiempo_mov = 100; // mínimo 100 ms
+    // Inicia movimiento
+    if (diferencia > 0) {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Open;
+    } else {
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Close;
+    }
+    persiana_mov_start[slot] = millis();
+    persiana_mov_destino[slot] = pos_destino;
+    memory_map[MaCaco_IN_s + slot] = Souliss_T2n_RstCmd;
+    i_trigger = 1; // Souliss_TRIGGED suele ser 1
+    if (i_trigger)
+        *trigger = i_trigger;
+    return i_trigger;
+}
+
+void Souliss_T22_Timer(U8 *memory_map, U8 slot)
+{
+    if (persiana_mov_start[slot] == 0 || persiana_mov_destino[slot] == -1)
+        return; // No hay movimiento en curso
+    S16 pos_actual = persiana_pos[slot];
+    S16 pos_destino = persiana_mov_destino[slot];
+    S16 diferencia = pos_destino - pos_actual;
+    U32 tiempo_mov = (U32)(abs(diferencia) * tiempo_total_persiana[slot]) / 100;
+    U32 tiempo_transcurrido = millis() - persiana_mov_start[slot];
+    if (tiempo_transcurrido >= tiempo_mov) {
+        // Movimiento terminado
+        persiana_pos[slot] = pos_destino;
+        memory_map[MaCaco_OUT_s + slot] = Souliss_T2n_Coil_Stop;
+        persiana_mov_start[slot] = 0;
+        persiana_mov_destino[slot] = -1;
+    }
+    // Si quieres actualizar la posición estimada en tiempo real (opcional):
+    else {
+        S16 avance = (S16)((tiempo_transcurrido * abs(diferencia)) / tiempo_mov);
+        if (diferencia > 0)
+            persiana_pos[slot] = pos_actual + avance;
+        else
+            persiana_pos[slot] = pos_actual - avance;
+    }
 }
