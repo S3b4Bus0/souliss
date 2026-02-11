@@ -1066,6 +1066,7 @@ void Souliss_SetT19(U8 *memory_map, U8 slot)
 		-  1(hex) for output ON.
 
 */
+long lastM=0L,startM=0L;
 /**************************************************************************/
 U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 {
@@ -1086,18 +1087,29 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 	}
 	else if ((memory_map[MaCaco_IN_s + slot] == Souliss_T1n_OffCmd))	// Off Command
 	{
+		U8 step_size=Souliss_T1n_BrightDefault/(1000/30);
+
 		// Trigger the change and save the actual color
-		if(memory_map[MaCaco_OUT_s + slot] != Souliss_T1n_OffCoil)
-		{
-			memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OffCoil;		// Switch off the light state
-			i_trigger = Souliss_TRIGGED;								// Trig the change
-		}
+		// if(memory_map[MaCaco_OUT_s + slot] != Souliss_T1n_OffCoil)
+		// {
+		// 	memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OffCoil;		// Switch off the light state
+		// 	i_trigger = Souliss_TRIGGED;								// Trig the change
+		// }
 
 		// Fade out and turn off the light step wise
-			while(memory_map[MaCaco_OUT_s + slot + 1])
-				memory_map[MaCaco_OUT_s + slot + 1]--;
+			//while(memory_map[MaCaco_OUT_s + slot + 1])
+			//	memory_map[MaCaco_OUT_s + slot + 1]--;
+		if(memory_map[MaCaco_OUT_s + slot + 1]>step_size){
+			memory_map[MaCaco_OUT_s + slot + 1]-=step_size;
+		}else{
+			memory_map[MaCaco_OUT_s + slot + 1]=0;
+		}
 
-		memory_map[MaCaco_IN_s + slot]    = Souliss_T1n_RstCmd;		// Reset
+		if(memory_map[MaCaco_OUT_s + slot] != Souliss_T1n_OffCoil && memory_map[MaCaco_OUT_s + slot + 1]==0) {
+			memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OffCoil;		// Switch off the light state
+			i_trigger = Souliss_TRIGGED;								// Trig the change
+			memory_map[MaCaco_IN_s + slot]    = Souliss_T1n_RstCmd;		// Reset
+		}
 	}
 	else if (memory_map[MaCaco_IN_s + slot] == Souliss_T1n_OnCmd)
 	{
@@ -1105,24 +1117,60 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 			i_trigger = Souliss_TRIGGED;
 
 		memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OnCoil;			// Switch on the output
+	
+		// long m=millis();
+		// 	if(startM==0L){
+		// 		lastM=millis();
+		// 		startM=millis();
+		// 	}else{
+				
+		// 		 Serial.print("Total:");
+		// 		 Serial.println(m-startM);
+		// 		 Serial.print("Step:");
+		// 		 Serial.println(m-lastM);
+		// 	}
+		U8 step_size=Souliss_T1n_BrightDefault/(1000/30);
 
-		// If there were no color set, use a light white
-		if((memory_map[MaCaco_AUXIN_s + slot + 1] == 0))
-		{
-			while(memory_map[MaCaco_OUT_s + slot + 1] < Souliss_T1n_BrightDefault)	// Set a light white
-				memory_map[MaCaco_OUT_s + slot + 1]++;
-
+		// If there weas no value set, set it to the default
+		if((memory_map[MaCaco_AUXIN_s + slot + 1] == 0)){
 			memory_map[MaCaco_AUXIN_s + slot + 1] = Souliss_T1n_BrightDefault;
-			memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
 		}
-		else
-		{
-			// Fade in to the last color
-			while(memory_map[MaCaco_OUT_s + slot + 1] < (memory_map[MaCaco_AUXIN_s + slot + 1]))
-				memory_map[MaCaco_OUT_s + slot + 1]++;
+			
+		// memory_map[MaCaco_AUXIN_s + slot + 1] = Souliss_T1n_BrightDefault;
+		// memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
+		
+		// Fade in to the last brightness
+		
+
+		//Handle limits		
+		if(memory_map[MaCaco_OUT_s + slot + 1] > memory_map[MaCaco_AUXIN_s + slot + 1] ||//Edge case where the current value is higher than the target 
+			memory_map[MaCaco_AUXIN_s + slot + 1] < step_size || 							 //Or the step size is bigger than the target
+			(memory_map[MaCaco_AUXIN_s + slot + 1] - memory_map[MaCaco_OUT_s + slot + 1]) < step_size	//Case where there's less than a step remaining
+			){
+			memory_map[MaCaco_OUT_s + slot + 1] = memory_map[MaCaco_AUXIN_s + slot + 1];
+		}else{
+			//increase a step and make sure to not overflow
+			if(memory_map[MaCaco_OUT_s + slot + 1] <= (memory_map[MaCaco_AUXIN_s + slot + 1]-step_size)){
+				memory_map[MaCaco_OUT_s + slot + 1] += step_size;
+			}
 		}
 
-		memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
+		
+		if(memory_map[MaCaco_OUT_s + slot + 1] >= (memory_map[MaCaco_AUXIN_s + slot + 1])){
+			memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset			
+			// Serial.print("Total:");
+			// Serial.println(m-startM);
+			// Serial.print("Step:");
+			// Serial.println(m-lastM);
+			// lastM=0L;
+			// startM=0L;
+		}
+		
+		//lastM=m;
+		// Serial.print("Level - ");
+		// Serial.print(slot);
+		// Serial.print(":");
+		// Serial.println(memory_map[MaCaco_OUT_s + slot + 1]);
 	}
 	else if (memory_map[MaCaco_IN_s + slot] == Souliss_T1n_BrightSwitch)		// Toggle Bright
 	{
@@ -1140,12 +1188,24 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 	}
 	else if (memory_map[MaCaco_IN_s + slot] == Souliss_T1n_BrightUp)		// Increase the light value
 	{
+		U8 step_size=Souliss_T1n_BrightDefault/(3000/30);
+
 		// Increase the light value
-		if(memory_map[MaCaco_OUT_s + slot + 1] < 255 - Souliss_T1n_BrightValue)
-			memory_map[MaCaco_OUT_s + slot + 1] += Souliss_T1n_BrightValue;
+//		if(memory_map[MaCaco_OUT_s + slot + 1] < 255 - Souliss_T1n_BrightValue)
+//			memory_map[MaCaco_OUT_s + slot + 1] += Souliss_T1n_BrightValue;
+
+		// Increase the light value
+		if(memory_map[MaCaco_OUT_s + slot + 1] < (255 - step_size)){
+			memory_map[MaCaco_OUT_s + slot + 1] += step_size;
+		} else {
+			memory_map[MaCaco_OUT_s + slot + 1] = 255;
+		}
+		//Serial.println(memory_map[MaCaco_OUT_s + slot + 1]);
+
+		//Set the default intensity
+		memory_map[MaCaco_AUXIN_s + slot + 1] = memory_map[MaCaco_OUT_s + slot + 1];
 
 		memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OnCoil;
-
 		memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
 
 		i_trigger = Souliss_TRIGGED;
