@@ -1194,18 +1194,8 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 //		if(memory_map[MaCaco_OUT_s + slot + 1] < 255 - Souliss_T1n_BrightValue)
 //			memory_map[MaCaco_OUT_s + slot + 1] += Souliss_T1n_BrightValue;
 
-		// Increase the light value
-		if(memory_map[MaCaco_OUT_s + slot + 1] < (255 - step_size)){
-			memory_map[MaCaco_OUT_s + slot + 1] += step_size;
-		} else {
-			memory_map[MaCaco_OUT_s + slot + 1] = 255;
-		}
-		//Serial.println(memory_map[MaCaco_OUT_s + slot + 1]);
-
-		//Set the default intensity
-		memory_map[MaCaco_AUXIN_s + slot + 1] = memory_map[MaCaco_OUT_s + slot + 1];
-
 		memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OnCoil;
+
 		memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
 
 		i_trigger = Souliss_TRIGGED;
