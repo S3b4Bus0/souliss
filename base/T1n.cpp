@@ -1066,6 +1066,15 @@ void Souliss_SetT19(U8 *memory_map, U8 slot)
 		-  1(hex) for output ON.
 
 */
+// Configurable ramp duration in milliseconds
+// Default: 1000ms for smooth fade in/out on On/Off commands
+// Formula: step_size = 255 / (RAMP_DURATION_MS / LOGIC_CYCLE_MS)
+// With 30ms cycle and 1000ms duration: 255 / 33 ≈ 8 per step
+#ifndef SOULISS_RAMP_DURATION_MS
+#define SOULISS_RAMP_DURATION_MS 1000
+#endif
+#define SOULISS_LOGIC_CYCLE_MS 30
+
 long lastM=0L,startM=0L;
 /**************************************************************************/
 U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
@@ -1087,7 +1096,8 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 	}
 	else if ((memory_map[MaCaco_IN_s + slot] == Souliss_T1n_OffCmd))	// Off Command
 	{
-		U8 step_size=Souliss_T1n_BrightDefault/(1000/30);
+		U8 step_size = 255 / (SOULISS_RAMP_DURATION_MS / SOULISS_LOGIC_CYCLE_MS);
+		if (step_size < 1) step_size = 1;  // Minimum step size
 
 		// Trigger the change and save the actual color
 		// if(memory_map[MaCaco_OUT_s + slot] != Souliss_T1n_OffCoil)
@@ -1129,7 +1139,8 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 		// 		 Serial.print("Step:");
 		// 		 Serial.println(m-lastM);
 		// 	}
-		U8 step_size=Souliss_T1n_BrightDefault/(1000/30);
+		U8 step_size = 255 / (SOULISS_RAMP_DURATION_MS / SOULISS_LOGIC_CYCLE_MS);
+		if (step_size < 1) step_size = 1;  // Minimum step size
 
 		// If there weas no value set, set it to the default
 		if((memory_map[MaCaco_AUXIN_s + slot + 1] == 0)){
@@ -1188,15 +1199,27 @@ U8 Souliss_Logic_T19(U8 *memory_map, U8 slot, U8 *trigger)
 	}
 	else if (memory_map[MaCaco_IN_s + slot] == Souliss_T1n_BrightUp)		// Increase the light value
 	{
-		U8 step_size=Souliss_T1n_BrightDefault/(3000/30);
+		// Use smaller step for smooth continuous dimming while holding button
+		// With BrightDefault=170 and 3000ms duration: 170/100 ≈ 2 per step
+		U8 step_size = Souliss_T1n_BrightDefault / (3000 / SOULISS_LOGIC_CYCLE_MS);
+		if (step_size < 1) step_size = 1;
 
-		// Increase the light value
-//		if(memory_map[MaCaco_OUT_s + slot + 1] < 255 - Souliss_T1n_BrightValue)
-//			memory_map[MaCaco_OUT_s + slot + 1] += Souliss_T1n_BrightValue;
+		// Actually increase the brightness (this was commented out - BUG FIX!)
+		if (memory_map[MaCaco_OUT_s + slot + 1] < (255 - step_size)) {
+			memory_map[MaCaco_OUT_s + slot + 1] += step_size;
+		} else {
+			memory_map[MaCaco_OUT_s + slot + 1] = 255;
+		}
 
+		// Store new level so next "On" will fade to this level
+		memory_map[MaCaco_AUXIN_s + slot + 1] = memory_map[MaCaco_OUT_s + slot + 1];
+
+		// Set to ON state (if it wasn't already)
 		memory_map[MaCaco_OUT_s + slot] = Souliss_T1n_OnCoil;
 
-		memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;			// Reset
+		// DO NOT reset command here - let DigKeepHold send continuous BrightUp while held
+		// The input will be reset naturally when button is released
+		// memory_map[MaCaco_IN_s + slot] = Souliss_T1n_RstCmd;
 
 		i_trigger = Souliss_TRIGGED;
 	}
